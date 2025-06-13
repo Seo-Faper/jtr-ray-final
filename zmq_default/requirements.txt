@@ -1,0 +1,4 @@
+pyzmq
+python-dotenv
+Flask
+requests

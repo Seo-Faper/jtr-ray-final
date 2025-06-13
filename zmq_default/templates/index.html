@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="refresh" content="5">
+    <title>분산 크래킹 대시보드</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; }
+        /* 비활성화된 버튼에 대한 스타일 */
+        .btn-disabled {
+            background-color: #4a5568; /* gray-600 */
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-10">
+            <h1 class="text-4xl font-bold text-cyan-400">분산 크래킹 대시보드</h1>
+            <p class="text-gray-400 mt-2">작업 제어 및 워커 노드 현황</p>
+        </header>
+
+        <main class="space-y-8">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                {% for category, message in messages %}
+                  {% set bg_color = 'bg-blue-900/50 border-blue-500' if category == 'info' else 'bg-green-900/50 border-green-500' if category == 'success' else 'bg-red-900/50 border-red-500' %}
+                  <div class="p-4 mb-4 text-sm border-l-4 rounded-r-lg {{ bg_color }}" role="alert">
+                    <span class="font-medium">{{ message }}</span>
+                  </div>
+                {% endfor %}
+              {% endif %}
+            {% endwith %}
+
+            <div class="bg-gray-800 shadow-lg rounded-lg p-6">
+                <h2 class="text-2xl font-semibold text-gray-200 mb-4">작업 제어 (Job Control)</h2>
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                    <form action="{{ url_for('start_job_route') }}" method="post" class="md:col-span-4">
+                        <input type="text" name="target_hash" placeholder="크랙할 대상 해시를 입력하세요..."
+                               class="w-full bg-gray-700 text-white border border-gray-600 rounded-md p-3 focus:ring-cyan-500 focus:border-cyan-500 disabled:bg-gray-600 disabled:cursor-not-allowed"
+                               {% if master_status.job_status == 'RUNNING' %}disabled{% endif %}>
+                    </form>
+                    <div class="grid grid-cols-2 md:grid-cols-1 gap-4">
+                        <button onclick="document.querySelector('form[action=\'{{ url_for('start_job_route') }}\']').submit();"
+                                class="w-full text-white font-bold py-3 px-4 rounded-md transition-colors
+                                       bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed"
+                                {% if master_status.job_status == 'RUNNING' %}disabled{% endif %}>
+                            작업 시작
+                        </button>
+                        <form action="{{ url_for('stop_job_route') }}" method="post" class="w-full">
+                            <button type="submit"
+                                    class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-md transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
+                                    {% if master_status.job_status != 'RUNNING' %}disabled{% endif %}>
+                                작업 중지
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-gray-800 shadow-lg rounded-lg p-6">
+                <h2 class="text-2xl font-semibold text-gray-200 mb-4">작업 상태 (Job Status)</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                    <div>
+                        <p class="text-sm text-gray-400">Status</p>
+                        {% set status_color = 'text-yellow-400' if master_status.job_status == 'WAITING' else 'text-cyan-400' if master_status.job_status == 'RUNNING' else 'text-gray-500' %}
+                        <p class="text-xl font-bold font-mono {{ status_color }}">{{ master_status.job_status }}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-400">Target Hash</p>
+                        <p class="text-xl font-mono truncate" title="{{ master_status.target_hash or 'N/A' }}">{{ master_status.target_hash or 'N/A' }}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-400">Progress (Sent)</p>
+                        <p class="text-xl font-mono">{{ "%.2f"|format(master_status.total_sent_count / 1000000) }}M</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-400">Speed</p>
+                        <p class="text-xl font-mono">{{ master_status.speed or '0 c/s' }}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-400">Elapsed Time</p>
+                        <p class="text-xl font-mono">{{ master_status.elapsed_time or '0.00s' }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-gray-800 shadow-lg rounded-lg overflow-hidden">
+                <div class="p-6">
+                    <h2 class="text-2xl font-semibold text-gray-200 mb-4">Active Workers: <span class="text-green-400 font-mono">{{ workers | length }}</span></h2>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead class="bg-gray-700">
+                            <tr>
+                                <th class="p-4 uppercase text-sm font-semibold tracking-wider">Worker ID</th>
+                                <th class="p-4 uppercase text-sm font-semibold tracking-wider">IP Address</th> <th class="p-4 uppercase text-sm font-semibold tracking-wider">Status</th>
+                                <th class="p-4 uppercase text-sm font-semibold tracking-wider">Last Seen</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-700">
+                            {% for worker_id, data in workers.items() %}
+                            <tr class="hover:bg-gray-700/50">
+                                <td class="p-4 font-mono text-sm text-gray-300">{{ worker_id }}</td>
+                                <td class="p-4 font-mono text-sm text-cyan-400">{{ data.ip_address or 'N/A' }}</td> <td class="p-4">
+                                    {% set status = data.get('status', 'Unknown') %}
+                                    {% if 'Cracking' in status %}
+                                        {% set color = 'bg-cyan-500 text-cyan-900' %}
+                                    {% elif 'Ready' in status or 'Idle' in status %}
+                                        {% set color = 'bg-yellow-500 text-yellow-900' %}
+                                    {% else %}
+                                        {% set color = 'bg-gray-500 text-gray-900' %}
+                                    {% endif %}
+                                    <span class="px-3 py-1 text-xs font-semibold rounded-full {{ color }}">{{ status }}</span>
+                                </td>
+                                <td class="p-4 text-sm text-gray-400">{{ data.last_seen | strftime }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center p-8 text-gray-500">
+                                    활성화된 워커가 없습니다. 워커를 시작해주세요.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+        <footer class="text-center mt-10 text-gray-600 text-sm">
+            <p>페이지는 5초마다 자동으로 새로고침됩니다.</p>
+        </footer>
+    </div>
+</body>
+</html>
