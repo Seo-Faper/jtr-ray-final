@@ -159,10 +159,8 @@ class DistributionPlanner:
                 count = worker_ratios.get(w_id, 0) // common_divisor
                 dispatch_plan.extend([identity] * count)
             
-            # 워커들에게 작업을 더 균등하게 분배하기 위해 순서를 섞습니다.
-            random.shuffle(dispatch_plan)
             
-            logger.info(f"Dispatch plan created (cycle size: {len(dispatch_plan)}). Rule: {self.rule}")
+           #logger.info(f"Dispatch plan created (cycle size: {len(dispatch_plan)}). Rule: {self.rule}")
             return dispatch_plan
 
 # ==============================================================================
